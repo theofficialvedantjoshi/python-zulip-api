@@ -49,6 +49,7 @@ class Event(TypedDict):
     start: datetime.datetime
     end: datetime.datetime
     html_link: str
+    reminder: datetime.datetime
     # The following fields are optional, and may not be present in all events.
     summary: str
     description: str
@@ -243,17 +244,46 @@ def populate_events() -> Optional[None]:
                 field = calendar_timezone.localize(field_naive)
             return field
 
-        events.append(
+        start = get_start_or_end(event, "start")
+        # Skip events that have already started but have still been fetched.
+        if start < datetime.datetime.now(start.tzinfo):
+            continue
+        reminders = event["reminders"]
+        # If useDefault is true (This can be set in calendar's settings under Event notifications) then fetch the default reminders.
+        if reminders.get("useDefault"):
+            calendar_list = (
+                service.calendarList().get(calendarId=commandline_options.calendarID).execute()
+            )
+            reminder_times = (
+                [
+                    start - datetime.timedelta(minutes=reminder["minutes"])
+                    for reminder in calendar_list["defaultReminders"]
+                ]
+                if calendar_list.get("defaultReminders")
+                else []
+            )
+        # If there are reminders set for the event, use them.
+        elif reminders.get("overrides"):
+            reminder_times = [
+                start - datetime.timedelta(minutes=reminder["minutes"])
+                for reminder in reminders["overrides"]
+            ]
+        # If there are no reminders set for the event, don't send reminders.
+        else:
+            reminder_times = []
+        events.extend(
             {
                 "id": event["id"],
-                "start": get_start_or_end(event, "start"),
+                "start": start,
                 "end": get_start_or_end(event, "end"),
                 "summary": event.get("summary", "(No Title)"),
                 "description": event.get("description", ""),
                 "html_link": event["htmlLink"],
+                "reminder": reminder,
                 "location": event.get("location", ""),
                 "hangout_link": event.get("hangoutLink", ""),
             }
+            for reminder in reminder_times
         )
 
 
@@ -313,16 +343,17 @@ def send_reminder_message(message: str, key: Tuple[str, datetime.datetime]) -> N
 
 def send_reminders() -> Optional[None]:
     now = datetime.datetime.now(tz=pytz.utc)
-
+    events.sort(key=lambda event: event["reminder"])
     for event in events:
-        dt = event["start"] - now
-        if dt.days == 0 and dt.seconds < 60 * calendar_options.interval:
-            # The unique key includes the start time due to repeating events.
-            key = (event["id"], event["start"])
+        # Send reminders for events whose reminder time has passed or is equal to the current time.
+        if event["reminder"] <= now:
+            key = (event["id"], event["reminder"])
             if key not in sent:
                 message = construct_message_from_event(event)
                 logging.info("Sending reminder: %s", message)
                 send_reminder_message(message, key)
+        else:
+            break
 
 
 # Loop forever
