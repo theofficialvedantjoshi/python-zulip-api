@@ -17,7 +17,10 @@ import pytz
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))
 import zulip
 
-SCOPES = ["https://www.googleapis.com/auth/calendar.events.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/calendar.events.readonly",
+    "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+]
 HOME_DIR = os.path.expanduser("~")
 
 # File containing user's access and refresh tokens for Google application requests.
@@ -252,7 +255,7 @@ def populate_events() -> Optional[None]:
         # If useDefault is true (This can be set in calendar's settings under Event notifications) then fetch the default reminders.
         if reminders.get("useDefault"):
             calendar_list = (
-                service.calendarList().get(calendarId=commandline_options.calendarID).execute()
+                service.calendarList().get(calendarId=calendar_options.calendar_id).execute()
             )
             reminder_times = (
                 [

@@ -2,15 +2,14 @@
 import json
 import os
 import runpy
+from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 
-
-TOKENS: dict = {
+TOKENS: dict[str, Any] = {
     "token": "mock_token",
     "refresh_token": "mock_refresh_token",
     "token_uri": "mock_token_uri",
@@ -22,7 +21,7 @@ TOKENS: dict = {
     "expiry": "mock_expiry",
 }
 
-CLIENT_SECRET: dict = {
+CLIENT_SECRET: dict[str, dict[str, str]] = {
     "installed": {
         "client_id": "mock_client_id",
         "project_id": "mock_project_id",
@@ -35,34 +34,18 @@ CLIENT_SECRET: dict = {
 
 
 @pytest.fixture
-def generate_tokens(tmp_path) -> str:
-    """
-    Generate a temporary tokens.json file for testing.
-    Args:
-        tmp_path: The temporary path fixture provided by pytest.
-    Returns:
-        str: The path to the generated tokens.json file.
-    """
-    tokens_path: str = tmp_path / "tokens.json"
-    tokens: dict = TOKENS
-    tokens_path.write_text(json.dumps(tokens))
+def generate_tokens(tmp_path: Path) -> str:
+    # Generate a temporary tokens.json file for testing.
+    tokens_path: Path = tmp_path / Path("tokens.json")
+    tokens_path.write_text(json.dumps(TOKENS))
     return str(tokens_path)
 
 
 @pytest.fixture
-def generate_client_secret(tmp_path: str) -> str:
-    """
-    Generate a temporary client_secret.json file for testing.
-
-    Args:
-        tmp_path: The temporary path fixture provided by pytest.
-
-    Returns:
-        str: The path to the generated client_secret.json file.
-    """
-    client_secret_path: str = tmp_path / "client_secret.json"
-    client_secret: dict = CLIENT_SECRET
-    client_secret_path.write_text(json.dumps(client_secret))
+def generate_client_secret(tmp_path: Path) -> str:
+    # Generate a temporary client_secret.json file for testing.
+    client_secret_path: Path = tmp_path / Path("client_secret.json")
+    client_secret_path.write_text(json.dumps(CLIENT_SECRET))
     return str(client_secret_path)
 
 
@@ -74,18 +57,7 @@ def test_get_valid_credentials(
     generate_tokens: str,
     generate_client_secret: str,
 ) -> None:
-    """
-    Test the get_credentials function with valid credentials.
-
-    Args:
-        _: MagicMock: Mock for the Request class.
-        mock_from_authorized_user_file: MagicMock: Mock for the from_authorized_user_file method.
-        generate_tokens: str: Path to the generated tokens.json file.
-        generate_client_secret: str: Path to the generated client_secret.json file.
-
-    Returns:
-        None
-    """
+    # Test the get_credentials function with valid credentials.
     mock_credentials: MagicMock = MagicMock(spec=Credentials)
     mock_credentials.valid = True
     mock_from_authorized_user_file.return_value = mock_credentials
@@ -108,22 +80,11 @@ def test_get_expired_credentials(
     generate_tokens: str,
     generate_client_secret: str,
 ) -> None:
-    """
-    Test the get_credentials function with expired credentials.
-
-    Args:
-        mock_request: MagicMock: Mock for the Request class.
-        mock_from_authorized_user_file: MagicMock: Mock for the from_authorized_user_file method.
-        generate_tokens: str: Path to the generated tokens.json file.
-        generate_client_secret: str: Path to the generated client_secret.json file.
-
-    Returns:
-        None
-    """
+    # Test the get_credentials function with expired credentials.
     mock_credentials: MagicMock = MagicMock(spec=Credentials)
     mock_credentials.valid = False
     mock_credentials.expired = True
-    mock_credentials.refresh_token = "mock_refresh_token"
+    mock_credentials.refresh_token = "mock_refresh_token"  # noqa: S105
     mock_credentials.to_json.return_value = json.dumps(TOKENS)
     mock_from_authorized_user_file.return_value = mock_credentials
     creds: Credentials = runpy.run_path("../get-google-credentials")["get_credentials"](
@@ -140,7 +101,7 @@ def test_get_expired_credentials(
     mock_credentials.to_json.assert_called_once()
     with open(generate_tokens, "w") as token_file:
         token_file.write(mock_credentials.to_json())
-    with open(generate_tokens, "r") as token_file:
+    with open(generate_tokens) as token_file:
         token_data = json.load(token_file)
     assert token_data == json.loads(mock_credentials.to_json())
 
@@ -151,17 +112,7 @@ def test_get_none_credentials(
     generate_tokens: str,
     generate_client_secret: str,
 ) -> None:
-    """
-    Test the get_credentials function with None credentials.
-
-    Args:
-        mock_from_client_secrets_file: MagicMock: Mock for the from_client_secrets_file method.
-        generate_tokens: str: Path to the generated tokens.json file.
-        generate_client_secret: str: Path to the generated client_secret.json file.
-
-    Returns:
-        None
-    """
+    # Test the get_credentials function with None credentials.
     if os.path.exists(generate_tokens):
         os.remove(generate_tokens)
     mock_credentials: MagicMock = MagicMock(spec=Credentials)
